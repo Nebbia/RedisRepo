@@ -4,6 +4,10 @@ using StackExchange.Redis;
 
 namespace RedisRepo.Src
 {
+	/// <summary>
+	/// Use this class to define the configuration of the Redis server. It is HIGHLY recommended that this class be 
+	/// a singleton.
+	/// </summary>
 	public class RedisConfig
 	{
 		private ConnectionMultiplexer _redisMultiplexer;

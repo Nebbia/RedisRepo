@@ -4,6 +4,9 @@ using System.Threading.Tasks;
 
 namespace RedisRepo.Src
 {
+	/// <summary>
+	/// 
+	/// </summary>
 	public interface ICacheRepo<T> where T : class
 	{
 		/// <summary>
@@ -30,8 +33,15 @@ namespace RedisRepo.Src
 		/// </summary>
 		List<Func<T, KeyValuePair<string, string>>> CustomIndices { get; set; }
 
+		/// <summary>
+		///		Defines whether the custom Indices have been set for the current instance of this ICacheRepo.
+		/// </summary>
 		bool CustomIndicesAreSet { get; set; }
 
+		/// <summary>
+		///		Method used to set the cache indices on this ICacheRepo instance.
+		/// </summary>
+		/// <param name="entity"></param>
 		void SetCustomCacheIndices(T entity);
 
 		/// <summary>
