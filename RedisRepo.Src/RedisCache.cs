@@ -22,7 +22,7 @@ namespace RedisRepo.Src
 		public RedisCache(RedisConfig redisConfig)
 		{
 			_redisConfig = redisConfig;
-			_redisDatabase = _redisConfig.GetRedisMultiplexer().GetDatabase(_redisConfig.RedisDatabaseId);
+			_redisDatabase = _redisConfig.RedisMultiplexer.GetDatabase(_redisConfig.RedisDatabaseId);
 		}
 
 		public bool Contains(string key, string partitionName = "") { return !string.IsNullOrEmpty(key) && ContainsAsync(key, partitionName).Result; }
@@ -108,6 +108,22 @@ namespace RedisRepo.Src
 			}
 			var result = JsonConvert.DeserializeObject<TValue>(cachedValue);
 			return result;
+		}
+
+		public List<TValue> GetAllItemsInPartition<TValue>(string partitionName) where TValue : class
+		{
+			return string.IsNullOrEmpty(partitionName) ? new List<TValue>() : GetAllItemsInPartitionAsync<TValue>(partitionName).Result;
+		}
+
+		public async Task<List<TValue>> GetAllItemsInPartitionAsync<TValue>(string partitionName) where TValue : class
+		{
+			if (string.IsNullOrEmpty(partitionName))
+				return new List<TValue>();
+			var partitionKey = ComposePartitionKey(partitionName);
+			var partitionHash = await _redisDatabase.HashGetAllAsync(partitionKey).ConfigureAwait(false);
+			return partitionHash
+				.Select(hashEntry => JsonConvert.DeserializeObject<TValue>(hashEntry.Value))
+				.Where(obj => obj != default(TValue)).ToList();
 		}
 
 		public async Task<List<string>> GetAllPartitionNamesAsync()
@@ -211,22 +227,6 @@ namespace RedisRepo.Src
 				var timeoutPartitionKey = ComposeTimeoutPartitionKey(partitionName);
 				await _redisDatabase.HashDeleteAsync(timeoutPartitionKey, key).ConfigureAwait(false);
 			}
-		}
-
-		public List<TValue> GetAllItemsInPartition<TValue>(string partitionName) where TValue : class
-		{
-			return string.IsNullOrEmpty(partitionName) ? new List<TValue>() : GetAllItemsInPartitionAsync<TValue>(partitionName).Result;
-		}
-
-		public async Task<List<TValue>> GetAllItemsInPartitionAsync<TValue>(string partitionName) where TValue : class
-		{
-			if (string.IsNullOrEmpty(partitionName))
-				return new List<TValue>();
-			var partitionKey = ComposePartitionKey(partitionName);
-			var partitionHash = await _redisDatabase.HashGetAllAsync(partitionKey).ConfigureAwait(false);
-			return partitionHash
-				.Select(hashEntry => JsonConvert.DeserializeObject<TValue>(hashEntry.Value))
-				.Where(obj => obj != default(TValue)).ToList();
 		}
 
 		public void RemoveFromCustomIndex(string indexName, string indexedValue, string cacheKey, string partitionName = "")
@@ -378,7 +378,7 @@ namespace RedisRepo.Src
 			return resultList;
 		}
 
-		private static string ComposePartitionKey(string partitionName) { return string.Format("{0}:{1}", "PartitionKey", partitionName); }
+		private static string ComposePartitionKey(string partitionName) { return string.Format("{0}:{1}", "Partition", partitionName); }
 
 		private static string ComposeTimeoutPartitionKey(string partitionName)
 		{
