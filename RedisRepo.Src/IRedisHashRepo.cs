@@ -89,5 +89,29 @@ namespace RedisRepo.Src
 		string ComposePrimaryCacheKey(string entityId);
 
 		string ComposeCollectionHashFieldName(string propertyName, string collectionKey);
+
+		///  <summary>
+		/// 		Gets the value for a dictionary stored at the given <see cref="dictionaryKey"/>
+		///  </summary>
+		///  <typeparam name="TKey"></typeparam>
+		///  <typeparam name="TFieldValue"></typeparam>
+		/// <param name="entity"></param>
+		/// <param name="propertyExpression"></param>
+		/// <param name="dictionaryKey"></param>
+		/// <returns></returns>
+		Task<TFieldValue> GetDictionaryFieldValueAsync<TFieldValue>(T entity, Expression<Func<T, object>> propertyExpression,
+		                                                                                        object dictionaryKey);
+
+		/// <summary>
+		///		Sets the value for the Dictionary item located at the given dictionaryKey
+		/// </summary>
+		/// <typeparam name="TFieldValue"></typeparam>
+		/// <param name="entity"></param>
+		/// <param name="propertyExpression"></param>
+		/// <param name="dictionaryKey"></param>
+		/// <param name="value"></param>
+		/// <returns></returns>
+		Task SetDictionaryFieldValueAsync<TFieldValue>(T entity, Expression<Func<T, object>> propertyExpression, object dictionaryKey,
+		                                                                     TFieldValue value);
 	}
 }

@@ -91,6 +91,17 @@ namespace RedisRepo.Src
 			return await GetFieldVaueAsync<TFieldValue>(redisKey, hashName).ConfigureAwait(false);
 		}
 
+		public async Task<TFieldValue> GetDictionaryFieldValueAsync<TFieldValue>(T entity, Expression<Func<T, object>> propertyExpression,
+		                                                                               object dictionaryKey)
+		{
+			var entityId = PrimaryEntityId(entity);
+			var redisKey = ComposePrimaryCacheKey(entityId);
+			var hashPropertyName = GetPropertyName(propertyExpression);
+			var key = JsonConvert.SerializeObject(dictionaryKey);
+			var hashName = ComposeCollectionHashFieldName(hashPropertyName, key);
+			return await GetFieldVaueAsync<TFieldValue>(redisKey, hashName).ConfigureAwait(false);
+		}
+
 		public async Task<TFieldValue> GetFieldVaueAsync<TFieldValue>(string redisKey, string hashName)
 		{
 			var hashVal = await RedisDatabase.HashGetAsync(redisKey, hashName).ConfigureAwait(false);
@@ -103,6 +114,18 @@ namespace RedisRepo.Src
 			var entityId = PrimaryEntityId(entity);
 			var redisKey = ComposePrimaryCacheKey(entityId);
 			var hashName = GetPropertyName(propertyExpression);
+			var serializedObj = JsonConvert.SerializeObject(value);
+			await RedisDatabase.HashSetAsync(redisKey, hashName, serializedObj).ConfigureAwait(false);
+		}
+
+		public async Task SetDictionaryFieldValueAsync<TFieldValue>(T entity, Expression<Func<T, object>> propertyExpression, object dictionaryKey,
+		                                                            TFieldValue value)
+		{
+			var entityId = PrimaryEntityId(entity);
+			var redisKey = ComposePrimaryCacheKey(entityId);
+			var propertyName = GetPropertyName(propertyExpression);
+			var serializedKey = JsonConvert.SerializeObject(dictionaryKey);
+			var hashName = ComposeCollectionHashFieldName(propertyName, serializedKey);
 			var serializedObj = JsonConvert.SerializeObject(value);
 			await RedisDatabase.HashSetAsync(redisKey, hashName, serializedObj).ConfigureAwait(false);
 		}
@@ -198,9 +221,11 @@ namespace RedisRepo.Src
 			var isICollection = propInterfaces.Any(pi => pi.IsGenericType && pi.GetGenericTypeDefinition() == typeof(ICollection<>));
 			var isArray = typeof(Array).IsAssignableFrom(propertyInfo.PropertyType);
 
-			//if(propInterfaces.Contains(typeof(ICollection)))
 			if(isICollection || isArray)
 			{
+				// We aren't going to flatten lists right now because getting and setting the individual items in a collection
+				// will be fairly complex when doing it generically.
+				return false;
 				var index = 1;
 				foreach(var listItem in (ICollection)propertyInfo.GetValue(entity))
 				{
@@ -223,8 +248,6 @@ namespace RedisRepo.Src
 			//if(prop.PropertyType.Name == "Dictionary`2")
 			if(isIDictionary)
 			{
-				// We're not handling dictionaries right now until I can figure out a way to deserialize it back out of a redis hash
-				//return false;
 				// Get all the hash entries for this property
 				var filteredHashEnttries = hash.Where(h => h.Name.ToString().Contains(prop.Name)).ToList();
 				if(filteredHashEnttries.Count < 1)
@@ -251,6 +274,8 @@ namespace RedisRepo.Src
 					object validVal;
 					if(hashKey is string)
 						validKey = hashKey;
+					else if(hashKey is int)
+						validKey = hashKey;
 					else
 					{
 						var keyObj = (JObject)hashKey;
@@ -272,9 +297,11 @@ namespace RedisRepo.Src
 			var isArray = typeof(Array).IsAssignableFrom(prop.PropertyType);
 
 			//if(prop.PropertyType.Name == "List`1")
-			//if(typeof(ICollection<>).IsAssignableFrom(prop.PropertyType))
 			if(isICollection || isArray)
 			{
+				// We aren't going to flatten lists right now because getting and setting the individual items in a collection
+				// will be fairly complex when doing it generically.
+				return false;
 				var filteredHashEnttries = hash.Where(h => h.Name.ToString().Contains(prop.Name)).ToList();
 				if(filteredHashEnttries.Count < 1)
 					return true;
