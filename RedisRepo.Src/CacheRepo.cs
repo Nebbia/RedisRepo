@@ -16,7 +16,7 @@ namespace RedisRepo.Src
 
 		public virtual Func<T, string> PrimaryEntityId
 		{
-			get { return _primaryCacheKey ?? (_primaryCacheKey = GetPrimaryCacheKey); }
+			get { return _primaryCacheKey ?? (_primaryCacheKey = GetPrimaryEntityId); }
 			set { _primaryCacheKey = value; }
 		}
 
@@ -129,7 +129,7 @@ namespace RedisRepo.Src
 		/// </summary>
 		/// <param name="entity">Entity from which to get the string value of its ID property</param>
 		/// <returns>string version of the entity's Id property</returns>
-		public virtual string GetPrimaryCacheKey(T entity)
+		public virtual string GetPrimaryEntityId(T entity)
 		{
 			var entityPropInfos = typeof(T).GetProperties().ToList();
 			PropertyInfo propInfo;
