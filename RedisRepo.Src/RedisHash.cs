@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 
 using Newtonsoft.Json;
@@ -148,7 +149,7 @@ namespace RedisRepo.Src
 			if(isIDictionary)
 			{
 				// We're not handling dictionaries right now until I can figure out a way to deserialize it back out of a redis hash
-				return false;
+				//return false;
 				// Get all the hash entries for this property
 				var filteredHashEnttries = hash.Where(h => h.Name.ToString().Contains(prop.Name)).ToList();
 				if(filteredHashEnttries.Count < 1)
@@ -162,16 +163,36 @@ namespace RedisRepo.Src
 						return false;
 				}
 				hashEntries.AddRange(filteredHashEnttries);
-				var dictionaryProperty = new Dictionary<object, object>();
+				var collectionType = prop.PropertyType.GetGenericTypeDefinition();
+				var typeArgs = GetCollectionType(prop.PropertyType);
+				var constructedType = collectionType.MakeGenericType(typeArgs);
+				var constructedInstance = Activator.CreateInstance(constructedType);
 				foreach(var hashEntry in hashEntries)
 				{
-					var parsedKey = hashEntry.Name.ToString().Substring(prop.Name.Length + 1);
-					var key = JsonConvert.DeserializeObject(parsedKey);
 					var value = JsonConvert.DeserializeObject(hashEntry.Value.ToString());
-					if(!dictionaryProperty.ContainsKey(key))
-						dictionaryProperty.Add(key, value);
+					var parsedKey = hashEntry.Name.ToString().Substring(prop.Name.Length + 1);
+					var hashKey = JsonConvert.DeserializeObject(parsedKey, typeArgs[0]);
+					object validKey;
+					object validVal;
+
+					if (hashKey is string)
+						validKey = hashKey;
+					else
+					{
+						var keyObj = (JObject)hashKey;
+						validKey = keyObj.ToObject(typeArgs[0]);
+					}
+					if (value is string)
+						validVal = value;
+					else
+					{
+						var valueJObj = (JObject)value;
+						validVal = valueJObj.ToObject(typeArgs[1]);
+					}
+					constructedInstance.GetType().GetMethod("Add").Invoke(constructedInstance, new[] { validKey, validVal });
+					
 				}
-				prop.SetValue(entity, dictionaryProperty);
+				prop.SetValue(entity, constructedInstance);
 				return true;
 			}
 			
@@ -203,9 +224,14 @@ namespace RedisRepo.Src
 					{
 						var valueInstance = Activator.CreateInstance(arrayType);
 						var value = JsonConvert.DeserializeAnonymousType(hashEntry.Value, valueInstance);
-						var jObject = (JObject)value; // Convert.ChangeType(value, arrayType);
-						var validValue = jObject.ToObject(arrayType);
-						listInstance.GetType().GetMethod("Add").Invoke(listInstance, new[] {validValue});
+						if(value is string)
+							listInstance.GetType().GetMethod("Add").Invoke(listInstance, new[] { value });
+						else
+						{
+							var jObj = (JObject)value;
+							var validValue = jObj.ToObject(arrayType);
+							listInstance.GetType().GetMethod("Add").Invoke(listInstance, new[] { validValue });
+						}
 					}
 					var arrayPropValue = listInstance.GetType().GetRuntimeMethod("ToArray", new Type[] {}).Invoke(listInstance, new object[]{});
 					prop.SetValue(entity, arrayPropValue);
@@ -219,13 +245,39 @@ namespace RedisRepo.Src
 					foreach (var hashEntry in hashEntries)
 					{
 						var value = JsonConvert.DeserializeObject(hashEntry.Value.ToString());
-						if (typeArgs.Length < 2)
-							constructedInstance.GetType().GetMethod("Add").Invoke(constructedInstance, new[] { value });
+						if(typeArgs.Length < 2)
+						{
+							if(value is string)
+								constructedInstance.GetType().GetMethod("Add").Invoke(constructedInstance, new[] { value });
+							else
+							{
+								var jObj = (JObject)value;
+								var validValue = jObj.ToObject(typeArgs[0]);
+								constructedInstance.GetType().GetMethod("Add").Invoke(constructedInstance, new[] { validValue });
+							}
+						}
 						else
 						{
 							var parsedKey = hashEntry.Name.ToString().Substring(prop.Name.Length + 1);
 							var hashKey = JsonConvert.DeserializeObject(parsedKey, typeArgs[0]);
-							constructedInstance.GetType().GetMethod("Add").Invoke(constructedInstance, new[] { hashKey, value });
+							object validKey;
+							object validVal;
+
+							if(hashKey is string)
+								validKey = hashKey;
+							else
+							{
+								var keyObj = (JObject)hashKey;
+								validKey = keyObj.ToObject(typeArgs[0]);
+							}
+							if(value is string)
+								validVal = value;
+							else
+							{
+								var valueJObj = (JObject)value;
+								validVal = valueJObj.ToObject(typeArgs[1]);
+							}
+							constructedInstance.GetType().GetMethod("Add").Invoke(constructedInstance, new[] { validKey, validVal });
 						}
 					}
 					prop.SetValue(entity, constructedInstance);
@@ -257,7 +309,7 @@ namespace RedisRepo.Src
 			if(isIDictionary)
 			{
 				// We're not handling dictionaries right now until I can figure out a way to deserialize it back out of a redis hash
-				return false;
+				//return false;
 				foreach(var item in (IDictionary)propertyInfo.GetValue(entity))
 				{
 					var itemVal = (DictionaryEntry)item;
