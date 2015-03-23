@@ -8,7 +8,7 @@ namespace RedisRepo.Src
 {
 	public interface IRedisHash<T> where T : class
 	{
-		bool FlattenCollections { get; set; }
+		bool FlattenDictionaries { get; set; }
 
 		/// <summary>
 		///     Function that takes in the object and returns the value of the primary Id of that object. The default
@@ -46,21 +46,24 @@ namespace RedisRepo.Src
 		/// 		Gets a strongly typed hash value based on the evaluation of the <see cref="propertyExpression"/>. The 
 		/// 		redis key is produced by the <see cref="PrimaryEntityId"/>.
 		///  </summary>
+		/// <param name="entity"></param>
 		/// <param name="propertyExpression">Func expression that gets a property name.</param>
-		Task<TFieldValue> GetFieldVaueAsync<TFieldValue>(Expression<Func<T, object>> propertyExpression);
+		Task<TFieldValue> GetFieldVaueAsync<TFieldValue>(T entity, Expression<Func<T, object>> propertyExpression);
 
 		/// <summary>
 		///		Gets the hash value at the given redis key and hash name.
 		/// </summary>
 		Task<TFieldValue> GetFieldVaueAsync<TFieldValue>(string redisKey, string hashName);
 
-		/// <summary>
-		///		Sets a redis hash value at the hash name that is the same name as the given property name
-		///		as a result of evaluating the <see cref="propertyExpression"/>.
-		/// </summary>
+		///  <summary>
+		/// 		Sets a redis hash value at the hash name that is the same name as the given property name
+		/// 		as a result of evaluating the <see cref="propertyExpression"/>.
+		///  </summary>
+		/// <param name="entity"></param>
 		/// <param name="propertyExpression"></param>
+		/// <param name="value"></param>
 		/// <returns></returns>
-		Task SetFieldValueAsync(Expression<Func<T, object>> propertyExpression);
+		Task SetFieldValueAsync<TFieldValue>(T entity, Expression<Func<T, object>> propertyExpression, TFieldValue value);
 
 		/// <summary>
 		/// Checks if the hash exists at a redis key that will be composed from calling <see cref="ComposePrimaryCacheKey"/>

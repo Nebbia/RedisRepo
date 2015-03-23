@@ -109,6 +109,44 @@ namespace RedisRepo.Tests
 			// Assert
 			Assert.IsNotNull(gottenUser);
 			Assert.IsTrue(string.Equals(givenUser.FirstName, gottenUser.FirstName));
+			Assert.IsTrue(string.Equals(givenUser.LastName, gottenUser.LastName));
+			Assert.IsTrue(givenUser.Emails.Count == gottenUser.Emails.Count);
+			Assert.IsTrue(gottenUser.SomeCollection.ContainsKey(gottenUser.Username + "-" + 2));
+		}
+
+		[TestMethod]
+		public void ShouldSetSingleHashField()
+		{
+			// Arrange
+			var givenUser = _users[0];
+			var primaryCacheKey = _userRedisHash.ComposePrimaryCacheKey(givenUser.Id.ToString());
+			_userRedisHash.SetAllAsync(givenUser).Wait();
+
+			// Act
+			givenUser.FirstName = "Brian";
+			_userRedisHash.SetFieldValueAsync(givenUser, info => info.FirstName, givenUser.FirstName).Wait();
+			var gottenUser = _userRedisHash.GetAllAsync(givenUser.Id.ToString()).Result;
+
+			// Assert
+			Assert.IsNotNull(gottenUser);
+			Assert.IsTrue(string.Equals(givenUser.FirstName, gottenUser.FirstName));
+		}
+
+		[TestMethod]
+		public void ShouldGetSingleHashField()
+		{
+			// Arrange
+			var givenUser = _users[0];
+			var primaryCacheKey = _userRedisHash.ComposePrimaryCacheKey(givenUser.Id.ToString());
+			_userRedisHash.SetAllAsync(givenUser).Wait();
+
+			// Act
+			givenUser.FirstName = "Brian";
+			_userRedisHash.SetFieldValueAsync(givenUser, info => info.FirstName, givenUser.FirstName).Wait();
+			var firstName = _userRedisHash.GetFieldVaueAsync<string>(givenUser, info => info.FirstName).Result;
+
+			// Assert
+			Assert.IsTrue(string.Equals(givenUser.FirstName, firstName));
 		}
 	}
 }
