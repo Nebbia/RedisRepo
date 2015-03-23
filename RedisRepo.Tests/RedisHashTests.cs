@@ -84,15 +84,15 @@ namespace RedisRepo.Tests
 			var email1 =
 				JsonConvert.DeserializeObject<string>(
 					_userRedisHash.RedisDatabase.HashGet(primaryCacheKey, _userRedisHash.ComposeCollectionHashFieldName("Emails", "1")));
-			var appRole1 =
-				JsonConvert.DeserializeObject<AppRole>(
-					_userRedisHash.RedisDatabase.HashGet(primaryCacheKey, _userRedisHash.ComposeCollectionHashFieldName("Roles", "1")));
+			//var appRole1 =
+			//	JsonConvert.DeserializeObject<AppRole>(
+			//		_userRedisHash.RedisDatabase.HashGet(primaryCacheKey, _userRedisHash.ComposeCollectionHashFieldName("Roles", "1")));
 
 			// Assert
 			Assert.IsTrue(string.Equals(firstName, givenUser.FirstName));
 			Assert.IsTrue(string.Equals(lastName, givenUser.LastName));
 			Assert.IsTrue(string.Equals(email1, string.Format("{0}.{1}.{2}@SomeEmail.com", givenUser.FirstName, givenUser.LastName, 1)));
-			Assert.IsTrue(string.Equals(givenUser.Roles[0].Name, appRole1.Name));
+			//Assert.IsTrue(string.Equals(givenUser.Roles[0].Name, appRole1.Name));
 		}
 
 		[TestMethod]
