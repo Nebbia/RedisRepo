@@ -1,20 +1,39 @@
-﻿using System;
+﻿// Copyright 2012-2014 Unikey Technologies, Inc. All Rights Reserved.
+
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
 namespace RedisRepo.Src
 {
 	/// <summary>
-	/// 
 	/// </summary>
 	public interface ICacheRepo<T> where T : class
 	{
+		/// <summary>
+		///     Reference to the current implementation of IAppCache.
+		/// </summary>
+		IAppCache AppCache { get; }
+
 		/// <summary>
 		///     Function that takes in the object and returns the value of the primary Id of that object. The default
 		///     implementation of this reflects over the object and looks for properties that are named Id, [Type-Name]Id,
 		///     or EntityId (in that order). If it doesn't find anything like that an exception is thrown.
 		/// </summary>
-		Func<T, string> PrimaryEntityId { get; set; }
+		Func<T, string> PrimaryEntityIdLocator { get; set; }
+
+		/// <summary>
+		///     Function that is used to compose the primary cache key. Allows the caller to enable namespace scenarios like
+		///     SomeNamespace:AnotherNamespace:UniqueIdentifier.
+		/// </summary>
+		Func<string, string> PrimaryCacheKeyFormatter { get; set; }
+
+		/// <summary>
+		///     Composes the default partition name. A partition is a logical grouping of cache items which allows for quick
+		///     retrieval
+		///     of all items in that grouping.
+		/// </summary>
+		Func<string> PartitionNameFormatter { get; set; }
 
 		/// <summary>
 		///     <para>
@@ -31,37 +50,32 @@ namespace RedisRepo.Src
 		///         be returned.
 		///     </para>
 		/// </summary>
-		List<Func<T, KeyValuePair<string, string>>> CustomIndices { get; set; }
+		List<Func<T, KeyValuePair<string, string>>> CustomIndexFormatters { get; set; }
 
 		/// <summary>
-		///		Defines whether the custom Indices have been set for the current instance of this ICacheRepo.
+		///     Defines whether the custom Indices have been set for the current instance of this ICacheRepo.
 		/// </summary>
 		bool CustomIndicesAreSet { get; set; }
 
 		/// <summary>
-		///		Method used to set the cache indices on this ICacheRepo instance.
+		///     Method used to set the cache indices on this ICacheRepo instance.
 		/// </summary>
 		/// <param name="entity"></param>
 		void SetCustomCacheIndices(T entity);
 
 		/// <summary>
-		///     Reference to the current implementation of IAppCache.
-		/// </summary>
-		IAppCache AppCache { get; }
-
-		/// <summary>
 		///     Does just what the method name says. Adds or Updates a cache item. This includes all the indices that
-		///     are defined in the CustomIndices property.
+		///     are defined in the CustomIndexFormatters property.
 		/// </summary>
 		Task AddOrUpdateAsync(T entity);
 
 		/// <summary>
-		///     Removes an item from cache, including the custom indices defined in the CustomIndices property.
+		///     Removes an item from cache, including the custom indices defined in the CustomIndexFormatters property.
 		/// </summary>
 		Task RemoveFromCacheAsync(T entity);
 
 		/// <summary>
-		///     Gets the object based on the given ID. A string is asked for since the PrimaryEntityId function property
+		///     Gets the object based on the given ID. A string is asked for since the PrimaryEntityIdLocator function property
 		///     defines that the Id property will be converted and returned as a string. This makes the use case of
 		///     this method more flexible.
 		/// </summary>
@@ -112,20 +126,5 @@ namespace RedisRepo.Src
 		/// <param name="indexName">Name of predefined index name</param>
 		/// <param name="indexedValue">Value to search by. The search is an equivalent search.</param>
 		Task<List<T>> FindAsync(string indexName, string indexedValue);
-
-		/// <summary>
-		///     Composes the default tracking index key. The Tracking index is what is used to keep track of all items of a
-		///     particular type that are in the cache.
-		/// </summary>
-		/// <returns></returns>
-		string ComposePartitionName();
-
-		/// <summary>
-		///     Composes the cache key for the object. This is based on the objects type name as well as the value of its
-		///     id property.
-		/// </summary>
-		/// <param name="entityId"></param>
-		/// <returns></returns>
-		string ComposePrimaryCacheKey(string entityId);
 	}
 }

@@ -1,4 +1,6 @@
-﻿using System;
+﻿// Copyright 2012-2014 Unikey Technologies, Inc. All Rights Reserved.
+
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
@@ -16,22 +18,40 @@ namespace RedisRepo.Src
 	public class RedisHash<T> : IRedisHash<T> where T : class, new()
 	{
 		private Func<T, string> _primaryEntityId;
+		private Func<string, string> _primaryCacheKeyFormatter;
+		private Func<string, string, string> _collectionHashFieldNameFormatter;
 
 		public RedisHash(RedisConfig redisConfig)
 		{
 			RedisDatabase = redisConfig.RedisMultiplexer.GetDatabase(redisConfig.RedisDatabaseId);
-			FlattenDictionaries = true;
+			FlattenDictionaries = false;
 		}
 
 		public bool FlattenDictionaries { get; set; }
 
-		public Func<T, string> PrimaryEntityId
+		public Func<T, string> PrimaryEntityIdLocator
 		{
 			get { return _primaryEntityId ?? (_primaryEntityId = GetDefaultEntityId); }
 			set { _primaryEntityId = value; }
 		}
 
+		public Func<string, string> PrimaryCacheKeyFormatter
+		{
+			get { return _primaryCacheKeyFormatter ?? (_primaryCacheKeyFormatter = s => s); }
+			set { _primaryCacheKeyFormatter = value; }
+		}
+
 		public IDatabase RedisDatabase { get; private set; }
+
+		public Func<string, string, string> DictionaryHashFieldNameFormatter
+		{
+			get
+			{
+				return _collectionHashFieldNameFormatter ??
+				       (_collectionHashFieldNameFormatter = (propertyName, fieldName) => string.Format("{0}:{1}", propertyName, fieldName));
+			}
+			set { _collectionHashFieldNameFormatter = value; }
+		}
 
 		public async Task SetAllAsync(T entity)
 		{
@@ -47,12 +67,12 @@ namespace RedisRepo.Src
 				var hashEntry = new HashEntry(hashFieldName, itemFieldValue);
 				hashEntries.Add(hashEntry);
 			}
-			await RedisDatabase.HashSetAsync(ComposePrimaryCacheKey(PrimaryEntityId(entity)), hashEntries.ToArray()).ConfigureAwait(false);
+			await RedisDatabase.HashSetAsync(PrimaryCacheKeyFormatter(PrimaryEntityIdLocator(entity)), hashEntries.ToArray()).ConfigureAwait(false);
 		}
 
 		public async Task<T> GetAllAsync(string entityId)
 		{
-			var redisKey = ComposePrimaryCacheKey(entityId);
+			var redisKey = PrimaryCacheKeyFormatter(entityId);
 			var hash = (await RedisDatabase.HashGetAllAsync(redisKey).ConfigureAwait(false)).ToList();
 			var props = typeof(T).GetProperties();
 			var entity = new T();
@@ -78,73 +98,84 @@ namespace RedisRepo.Src
 
 		public async Task DeleteAsync(T entity)
 		{
-			var entityId = PrimaryEntityId(entity);
-			var redisKey = ComposePrimaryCacheKey(entityId);
+			var entityId = PrimaryEntityIdLocator(entity);
+			await DeleteAsync(entityId).ConfigureAwait(false);
+		}
+
+		public async Task DeleteAsync(string entityId)
+		{
+			var redisKey = PrimaryCacheKeyFormatter(entityId);
 			await RedisDatabase.KeyDeleteAsync(redisKey).ConfigureAwait(false);
 		}
 
-		public async Task<TFieldValue> GetFieldVaueAsync<TFieldValue>(T entity, Expression<Func<T, object>> propertyExpression)
+		public async Task<TFieldValue> GetFieldVaueAsync<TFieldValue>(string entityId, Expression<Func<T, TFieldValue>> propertyExpression)
 		{
-			var entityId = PrimaryEntityId(entity);
-			var redisKey = ComposePrimaryCacheKey(entityId);
+			var redisKey = PrimaryCacheKeyFormatter(entityId);
 			var hashName = GetPropertyName(propertyExpression);
+			var fieldType = typeof(TFieldValue);
+			var isIDictionary = fieldType.GetInterfaces().Any(pi => pi.IsGenericType && pi.GetGenericTypeDefinition() == typeof(IDictionary<,>));
+			if(isIDictionary && FlattenDictionaries)
+			{
+				var fullHash = await RedisDatabase.HashGetAllAsync(redisKey).ConfigureAwait(false);
+				var dictionaryHashes = fullHash.Where(h => h.Name.ToString().Contains(hashName)).ToList();
+				var constructedDictionary = GetConstructedDictionaryPropertyInstance(fieldType, dictionaryHashes, hashName);
+				return (TFieldValue)constructedDictionary;
+			}
 			return await GetFieldVaueAsync<TFieldValue>(redisKey, hashName).ConfigureAwait(false);
 		}
 
-		public async Task<TFieldValue> GetDictionaryFieldValueAsync<TFieldValue>(T entity, Expression<Func<T, object>> propertyExpression,
-		                                                                               object dictionaryKey)
+		public async Task<TFieldValue> GetDictionaryFieldValueAsync<TFieldValue>(string entityId, Expression<Func<T, object>> propertyExpression,
+		                                                                         object dictionaryKey)
 		{
-			var entityId = PrimaryEntityId(entity);
-			var redisKey = ComposePrimaryCacheKey(entityId);
+			if(!FlattenDictionaries)
+				return default(TFieldValue);
+			var redisKey = PrimaryCacheKeyFormatter(entityId);
 			var hashPropertyName = GetPropertyName(propertyExpression);
 			var key = JsonConvert.SerializeObject(dictionaryKey);
-			var hashName = ComposeCollectionHashFieldName(hashPropertyName, key);
+			var hashName = DictionaryHashFieldNameFormatter(hashPropertyName, key);
 			return await GetFieldVaueAsync<TFieldValue>(redisKey, hashName).ConfigureAwait(false);
 		}
 
-		public async Task<TFieldValue> GetFieldVaueAsync<TFieldValue>(string redisKey, string hashName)
+		public async Task<TFieldValue> GetFieldVaueAsync<TFieldValue>(string entityId, string hashName)
 		{
-			var hashVal = await RedisDatabase.HashGetAsync(redisKey, hashName).ConfigureAwait(false);
+			var cacheKey = PrimaryCacheKeyFormatter(entityId);
+			var hashVal = await RedisDatabase.HashGetAsync(cacheKey, hashName).ConfigureAwait(false);
 			var val = JsonConvert.DeserializeObject<TFieldValue>(hashVal);
 			return val;
 		}
 
-		public async Task SetFieldValueAsync<TFieldValue>(T entity, Expression<Func<T, object>> propertyExpression, TFieldValue value)
+		public async Task SetFieldValueAsync<TFieldValue>(string entityId, Expression<Func<T, TFieldValue>> propertyExpression, TFieldValue value)
 		{
-			var entityId = PrimaryEntityId(entity);
-			var redisKey = ComposePrimaryCacheKey(entityId);
+			var redisKey = PrimaryCacheKeyFormatter(entityId);
 			var hashName = GetPropertyName(propertyExpression);
 			var serializedObj = JsonConvert.SerializeObject(value);
 			await RedisDatabase.HashSetAsync(redisKey, hashName, serializedObj).ConfigureAwait(false);
 		}
 
-		public async Task SetDictionaryFieldValueAsync<TFieldValue>(T entity, Expression<Func<T, object>> propertyExpression, object dictionaryKey,
-		                                                            TFieldValue value)
+		public async Task SetDictionaryFieldValueAsync<TFieldValue>(string entityId, Expression<Func<T, object>> propertyExpression,
+		                                                            object dictionaryKey, TFieldValue value)
 		{
-			var entityId = PrimaryEntityId(entity);
-			var redisKey = ComposePrimaryCacheKey(entityId);
+			if(!FlattenDictionaries)
+				return;
+			var redisKey = PrimaryCacheKeyFormatter(entityId);
 			var propertyName = GetPropertyName(propertyExpression);
 			var serializedKey = JsonConvert.SerializeObject(dictionaryKey);
-			var hashName = ComposeCollectionHashFieldName(propertyName, serializedKey);
+			var hashName = DictionaryHashFieldNameFormatter(propertyName, serializedKey);
 			var serializedObj = JsonConvert.SerializeObject(value);
 			await RedisDatabase.HashSetAsync(redisKey, hashName, serializedObj).ConfigureAwait(false);
 		}
 
 		public async Task<bool> ExistsAsync(T entity)
 		{
-			var entityId = PrimaryEntityId(entity);
-			var redisKey = ComposePrimaryCacheKey(entityId);
+			var entityId = PrimaryEntityIdLocator(entity);
+			var redisKey = PrimaryCacheKeyFormatter(entityId);
 			return await RedisDatabase.KeyExistsAsync(redisKey).ConfigureAwait(false);
 		}
 
-		public async Task<bool> ExistsAsync(string redisKey) { return await RedisDatabase.KeyExistsAsync(redisKey).ConfigureAwait(false); }
-
-		public string ComposePrimaryCacheKey(string entityId) { return string.Format("ObjectHash:{0}:{1}", typeof(T).Name, entityId); }
-
-		public string ComposeCollectionHashFieldName(string propertyName, string collectionKey)
+		public async Task<bool> ExistsAsync(string entityId)
 		{
-			var name = string.Format("{0}:{1}", propertyName, collectionKey);
-			return name;
+			var cacheKey = PrimaryCacheKeyFormatter(entityId);
+			return await RedisDatabase.KeyExistsAsync(cacheKey).ConfigureAwait(false);
 		}
 
 		private static string GetDefaultEntityId(T entity)
@@ -183,7 +214,7 @@ namespace RedisRepo.Src
 			throw new Exception("There was no Id property found on the given entity for Redis caching.");
 		}
 
-		private static string GetPropertyName(Expression<Func<T, object>> propertyExpression)
+		private static string GetPropertyName<TFieldValue>(Expression<Func<T, TFieldValue>> propertyExpression)
 		{
 			var body = propertyExpression.Body;
 			var convertExpression = body as UnaryExpression;
@@ -211,7 +242,7 @@ namespace RedisRepo.Src
 					var itemVal = (DictionaryEntry)item;
 					var keySerialized = JsonConvert.SerializeObject(itemVal.Key);
 					var valueSerialized = JsonConvert.SerializeObject(itemVal.Value);
-					var itemFieldHashName = ComposeCollectionHashFieldName(hashFieldName, keySerialized);
+					var itemFieldHashName = DictionaryHashFieldNameFormatter(hashFieldName, keySerialized);
 					var itemFieldValue = valueSerialized;
 					hashEntry = new HashEntry(itemFieldHashName, itemFieldValue);
 					hashEntries.Add(hashEntry);
@@ -220,16 +251,16 @@ namespace RedisRepo.Src
 			}
 			var isICollection = propInterfaces.Any(pi => pi.IsGenericType && pi.GetGenericTypeDefinition() == typeof(ICollection<>));
 			var isArray = typeof(Array).IsAssignableFrom(propertyInfo.PropertyType);
-
 			if(isICollection || isArray)
 			{
 				// We aren't going to flatten lists right now because getting and setting the individual items in a collection
-				// will be fairly complex when doing it generically.
+				// will be fairly complex when doing it generically. Leaving it here because I spent a good long while trying to
+				// figure out how to do this and don't want to forget how. I'll tag it in Git later and remove the code.
 				return false;
 				var index = 1;
 				foreach(var listItem in (ICollection)propertyInfo.GetValue(entity))
 				{
-					var itemFieldHashName = ComposeCollectionHashFieldName(hashFieldName, index.ToString());
+					var itemFieldHashName = DictionaryHashFieldNameFormatter(hashFieldName, index.ToString());
 					var itemFieldValue = JsonConvert.SerializeObject(listItem);
 					hashEntry = new HashEntry(itemFieldHashName, itemFieldValue);
 					hashEntries.Add(hashEntry);
@@ -261,36 +292,8 @@ namespace RedisRepo.Src
 						return false;
 				}
 				hashEntries.AddRange(filteredHashEnttries);
-				var collectionType = prop.PropertyType.GetGenericTypeDefinition();
-				var typeArgs = GetCollectionType(prop.PropertyType);
-				var constructedType = collectionType.MakeGenericType(typeArgs);
-				var constructedInstance = Activator.CreateInstance(constructedType);
-				foreach(var hashEntry in hashEntries)
-				{
-					var value = JsonConvert.DeserializeObject(hashEntry.Value.ToString());
-					var parsedKey = hashEntry.Name.ToString().Substring(prop.Name.Length + 1);
-					var hashKey = JsonConvert.DeserializeObject(parsedKey, typeArgs[0]);
-					object validKey;
-					object validVal;
-					if(hashKey is string)
-						validKey = hashKey;
-					else if(hashKey is int)
-						validKey = hashKey;
-					else
-					{
-						var keyObj = (JObject)hashKey;
-						validKey = keyObj.ToObject(typeArgs[0]);
-					}
-					if(value is string)
-						validVal = value;
-					else
-					{
-						var valueJObj = (JObject)value;
-						validVal = valueJObj.ToObject(typeArgs[1]);
-					}
-					constructedInstance.GetType().GetMethod("Add").Invoke(constructedInstance, new[] {validKey, validVal});
-				}
-				prop.SetValue(entity, constructedInstance);
+				var constructedDictionary = GetConstructedDictionaryPropertyInstance(prop.PropertyType, hashEntries, prop.Name);
+				prop.SetValue(entity, constructedDictionary);
 				return true;
 			}
 			var isICollection = propInterfaces.Any(pi => pi.IsGenericType && pi.GetGenericTypeDefinition() == typeof(ICollection<>));
@@ -300,7 +303,8 @@ namespace RedisRepo.Src
 			if(isICollection || isArray)
 			{
 				// We aren't going to flatten lists right now because getting and setting the individual items in a collection
-				// will be fairly complex when doing it generically.
+				// will be fairly complex when doing it generically. Leaving it here because I spent a good long while trying to
+				// figure out how to do this and don't want to forget how. I'll tag it in git later and remove the code.
 				return false;
 				var filteredHashEnttries = hash.Where(h => h.Name.ToString().Contains(prop.Name)).ToList();
 				if(filteredHashEnttries.Count < 1)
@@ -326,64 +330,80 @@ namespace RedisRepo.Src
 						var value = JsonConvert.DeserializeAnonymousType(hashEntry.Value, valueInstance);
 						if(value is string)
 							listInstance.GetType().GetMethod("Add").Invoke(listInstance, new[] {value});
-						else
-						{
-							var jObj = (JObject)value;
-							var validValue = jObj.ToObject(arrayType);
-							listInstance.GetType().GetMethod("Add").Invoke(listInstance, new[] {validValue});
-						}
+						var jObj = (JObject)value;
+						var validValue = jObj.ToObject(arrayType);
+						listInstance.GetType().GetMethod("Add").Invoke(listInstance, new[] {validValue});
 					}
 					var arrayPropValue = listInstance.GetType().GetRuntimeMethod("ToArray", new Type[] {}).Invoke(listInstance, new object[] {});
 					prop.SetValue(entity, arrayPropValue);
 				}
-				else
+				var collectionType = prop.PropertyType.GetGenericTypeDefinition();
+				var typeArgs = GetCollectionType(prop.PropertyType);
+				var constructedType = collectionType.MakeGenericType(typeArgs);
+				var constructedInstance = Activator.CreateInstance(constructedType);
+				foreach(var hashEntry in hashEntries)
 				{
-					var collectionType = prop.PropertyType.GetGenericTypeDefinition();
-					var typeArgs = GetCollectionType(prop.PropertyType);
-					var constructedType = collectionType.MakeGenericType(typeArgs);
-					var constructedInstance = Activator.CreateInstance(constructedType);
-					foreach(var hashEntry in hashEntries)
+					var value = JsonConvert.DeserializeObject(hashEntry.Value.ToString());
+					if(typeArgs.Length < 2)
 					{
-						var value = JsonConvert.DeserializeObject(hashEntry.Value.ToString());
-						if(typeArgs.Length < 2)
-						{
-							if(value is string)
-								constructedInstance.GetType().GetMethod("Add").Invoke(constructedInstance, new[] {value});
-							else
-							{
-								var jObj = (JObject)value;
-								var validValue = jObj.ToObject(typeArgs[0]);
-								constructedInstance.GetType().GetMethod("Add").Invoke(constructedInstance, new[] {validValue});
-							}
-						}
-						else
-						{
-							var parsedKey = hashEntry.Name.ToString().Substring(prop.Name.Length + 1);
-							var hashKey = JsonConvert.DeserializeObject(parsedKey, typeArgs[0]);
-							object validKey;
-							object validVal;
-							if(hashKey is string)
-								validKey = hashKey;
-							else
-							{
-								var keyObj = (JObject)hashKey;
-								validKey = keyObj.ToObject(typeArgs[0]);
-							}
-							if(value is string)
-								validVal = value;
-							else
-							{
-								var valueJObj = (JObject)value;
-								validVal = valueJObj.ToObject(typeArgs[1]);
-							}
-							constructedInstance.GetType().GetMethod("Add").Invoke(constructedInstance, new[] {validKey, validVal});
-						}
+						if(value is string)
+							constructedInstance.GetType().GetMethod("Add").Invoke(constructedInstance, new[] {value});
+						var jObj = (JObject)value;
+						var validValue = jObj.ToObject(typeArgs[0]);
+						constructedInstance.GetType().GetMethod("Add").Invoke(constructedInstance, new[] {validValue});
 					}
-					prop.SetValue(entity, constructedInstance);
+					var parsedKey = hashEntry.Name.ToString().Substring(prop.Name.Length + 1);
+					var hashKey = JsonConvert.DeserializeObject(parsedKey, typeArgs[0]);
+					object validKey;
+					object validVal;
+					if(hashKey is string)
+						validKey = hashKey;
+					var keyObj = (JObject)hashKey;
+					validKey = keyObj.ToObject(typeArgs[0]);
+					if(value is string)
+						validVal = value;
+					var valueJObj = (JObject)value;
+					validVal = valueJObj.ToObject(typeArgs[1]);
+					constructedInstance.GetType().GetMethod("Add").Invoke(constructedInstance, new[] {validKey, validVal});
 				}
+				prop.SetValue(entity, constructedInstance);
 				return true;
 			}
 			return false;
+		}
+
+		private static object GetConstructedDictionaryPropertyInstance(Type fieldType, List<HashEntry> dictionaryHashes, string propertyName)
+		{
+			var collectionType = fieldType.GetGenericTypeDefinition();
+			var typeArgs = GetCollectionType(fieldType);
+			var constructedType = collectionType.MakeGenericType(typeArgs);
+			var constructedInstance = Activator.CreateInstance(constructedType);
+			foreach (var hashEntry in dictionaryHashes)
+			{
+				var value = JsonConvert.DeserializeObject(hashEntry.Value.ToString());
+				var parsedKey = hashEntry.Name.ToString().Substring(propertyName.Length + 1);
+				var hashKey = JsonConvert.DeserializeObject(parsedKey, typeArgs[0]);
+				object validKey;
+				object validVal;
+				if (hashKey is string)
+					validKey = hashKey;
+				else if (hashKey is int)
+					validKey = hashKey;
+				else
+				{
+					var keyObj = (JObject)hashKey;
+					validKey = keyObj.ToObject(typeArgs[0]);
+				}
+				if (value is string)
+					validVal = value;
+				else
+				{
+					var valueJObj = (JObject)value;
+					validVal = valueJObj.ToObject(typeArgs[1]);
+				}
+				constructedInstance.GetType().GetMethod("Add").Invoke(constructedInstance, new[] { validKey, validVal });
+			}
+			return constructedInstance;
 		}
 
 		private static Type[] GetCollectionType(Type type)

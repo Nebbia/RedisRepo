@@ -4,6 +4,8 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 using Newtonsoft.Json;
 
+using Nito.AsyncEx.Synchronous;
+
 using RedisRepo.Src;
 using RedisRepo.Tests.MockData;
 using RedisRepo.Tests.ServiceLocator;
@@ -22,10 +24,11 @@ namespace RedisRepo.Tests
 			Startup.Run();
 			_appCache = AppServiceLocator.Current.GetInstance<IAppCache>();
 			_userRedisHash = AppServiceLocator.Current.GetInstance<IRedisHash<UserInfo>>();
+			_userRedisHash.FlattenDictionaries = true;
 
 			// This isn't truly necessary since the default value of PromaryEntityId is a method that uses reflection to 
 			// look for a property with a name of Id, UserInfoId, or EntityId;
-			_userRedisHash.PrimaryEntityId = info => info.Id.ToString();
+			_userRedisHash.PrimaryEntityIdLocator = info => info.Id.ToString();
 		}
 
 		[TestInitialize]
@@ -72,10 +75,10 @@ namespace RedisRepo.Tests
 		{
 			// Arrange
 			var givenUser = _users[0];
-			var primaryCacheKey = _userRedisHash.ComposePrimaryCacheKey(givenUser.Id.ToString());
+			var primaryCacheKey = _userRedisHash.PrimaryCacheKeyFormatter(givenUser.Id.ToString());
 
 			// Act
-			_userRedisHash.SetAllAsync(givenUser).Wait();
+			_userRedisHash.SetAllAsync(givenUser).WaitAndUnwrapException();
 			var firstName =
 				JsonConvert.DeserializeObject<string>(_userRedisHash.RedisDatabase.HashGet(primaryCacheKey, "FirstName"));
 			var lastName =
@@ -91,11 +94,11 @@ namespace RedisRepo.Tests
 		{
 			// Arrange
 			var givenUser = _users[0];
-			var primaryCacheKey = _userRedisHash.ComposePrimaryCacheKey(givenUser.Id.ToString());
-			_userRedisHash.SetAllAsync(givenUser).Wait();
+			var primaryCacheKey = _userRedisHash.PrimaryCacheKeyFormatter(givenUser.Id.ToString());
+			_userRedisHash.SetAllAsync(givenUser).WaitAndUnwrapException();
 
 			// Act
-			var gottenUser = _userRedisHash.GetAllAsync(givenUser.Id.ToString()).Result;
+			var gottenUser = _userRedisHash.GetAllAsync(givenUser.Id.ToString()).WaitAndUnwrapException();
 
 			// Assert
 			Assert.IsNotNull(gottenUser);
@@ -110,13 +113,13 @@ namespace RedisRepo.Tests
 		{
 			// Arrange
 			var givenUser = _users[0];
-			var primaryCacheKey = _userRedisHash.ComposePrimaryCacheKey(givenUser.Id.ToString());
-			_userRedisHash.SetAllAsync(givenUser).Wait();
+			var primaryCacheKey = _userRedisHash.PrimaryCacheKeyFormatter(givenUser.Id.ToString());
+			_userRedisHash.SetAllAsync(givenUser).WaitAndUnwrapException();
 
 			// Act
 			givenUser.FirstName = "Brian";
-			_userRedisHash.SetFieldValueAsync(givenUser, info => info.FirstName, givenUser.FirstName).Wait();
-			var gottenUser = _userRedisHash.GetAllAsync(givenUser.Id.ToString()).Result;
+			_userRedisHash.SetFieldValueAsync(givenUser.Id.ToString(), info => info.FirstName, givenUser.FirstName).WaitAndUnwrapException();
+			var gottenUser = _userRedisHash.GetAllAsync(givenUser.Id.ToString()).WaitAndUnwrapException();
 
 			// Assert
 			Assert.IsNotNull(gottenUser);
@@ -128,13 +131,13 @@ namespace RedisRepo.Tests
 		{
 			// Arrange
 			var givenUser = _users[0];
-			var primaryCacheKey = _userRedisHash.ComposePrimaryCacheKey(givenUser.Id.ToString());
-			_userRedisHash.SetAllAsync(givenUser).Wait();
+			var primaryCacheKey = _userRedisHash.PrimaryCacheKeyFormatter(givenUser.Id.ToString());
+			_userRedisHash.SetAllAsync(givenUser).WaitAndUnwrapException();
 
 			// Act
 			givenUser.FirstName = "Brian";
-			_userRedisHash.SetFieldValueAsync(givenUser, info => info.FirstName, givenUser.FirstName).Wait();
-			var firstName = _userRedisHash.GetFieldVaueAsync<string>(givenUser, info => info.FirstName).Result;
+			_userRedisHash.SetFieldValueAsync(givenUser.Id.ToString(), info => info.FirstName, givenUser.FirstName).WaitAndUnwrapException();
+			var firstName = _userRedisHash.GetFieldVaueAsync(givenUser.Id.ToString(), info => info.FirstName).WaitAndUnwrapException();
 
 			// Assert
 			Assert.IsTrue(string.Equals(givenUser.FirstName, firstName));
@@ -145,15 +148,15 @@ namespace RedisRepo.Tests
 		{
 			// Arrange
 			var givenUser = _users[0];
-			var primaryCacheKey = _userRedisHash.ComposePrimaryCacheKey(givenUser.Id.ToString());
-			_userRedisHash.SetAllAsync(givenUser).Wait();
+			var primaryCacheKey = _userRedisHash.PrimaryCacheKeyFormatter(givenUser.Id.ToString());
+			_userRedisHash.SetAllAsync(givenUser).WaitAndUnwrapException();
 
 			// Act
 			givenUser.SomeCollection.Remove(2);
 			var newRole = new AppRole {Id = 44, Name = "My Custom Role", RoleGroup = "Changed Role Group"};
 			givenUser.SomeCollection.Add(2, newRole);
-			_userRedisHash.SetDictionaryFieldValueAsync(givenUser, info => info.SomeCollection, 2, newRole).Wait();
-			var gottenUser = _userRedisHash.GetAllAsync(givenUser.Id.ToString()).Result;
+			_userRedisHash.SetDictionaryFieldValueAsync(givenUser.Id.ToString(), info => info.SomeCollection, 2, newRole).WaitAndUnwrapException();
+			var gottenUser = _userRedisHash.GetAllAsync(givenUser.Id.ToString()).WaitAndUnwrapException();
 			AppRole gottenNewRole;
 			AppRole givenNewRole;
 			gottenUser.SomeCollection.TryGetValue(2, out gottenNewRole);
@@ -169,16 +172,16 @@ namespace RedisRepo.Tests
 		{
 			// Arrange
 			var givenUser = _users[0];
-			var primaryCacheKey = _userRedisHash.ComposePrimaryCacheKey(givenUser.Id.ToString());
-			_userRedisHash.SetAllAsync(givenUser).Wait();
+			var primaryCacheKey = _userRedisHash.PrimaryCacheKeyFormatter(givenUser.Id.ToString());
+			_userRedisHash.SetAllAsync(givenUser).WaitAndUnwrapException();
 
 			// Act
 			givenUser.SomeCollection.Remove(2);
 			var newRole = new AppRole {Id = 44, Name = "My Custom Role", RoleGroup = "Changed Role Group"};
 			givenUser.SomeCollection.Add(2, newRole);
-			_userRedisHash.SetDictionaryFieldValueAsync(givenUser, info => info.SomeCollection, 2, newRole).Wait();
-			var gottenUser = _userRedisHash.GetAllAsync(givenUser.Id.ToString()).Result;
-			var gottenNewRole = _userRedisHash.GetDictionaryFieldValueAsync<AppRole>(gottenUser, info => info.SomeCollection, 2).Result;
+			_userRedisHash.SetDictionaryFieldValueAsync(givenUser.Id.ToString(), info => info.SomeCollection, 2, newRole).WaitAndUnwrapException();
+			var gottenUser = _userRedisHash.GetAllAsync(givenUser.Id.ToString()).WaitAndUnwrapException();
+			var gottenNewRole = _userRedisHash.GetDictionaryFieldValueAsync<AppRole>(givenUser.Id.ToString(), info => info.SomeCollection, 2).WaitAndUnwrapException();
 			AppRole givenNewRole;
 
 			//gottenUser.SomeCollection.TryGetValue(2, out gottenNewRole);
@@ -186,6 +189,33 @@ namespace RedisRepo.Tests
 
 			// Assert
 			Assert.IsNotNull(gottenUser);
+			Assert.IsTrue(string.Equals(gottenNewRole.Name, givenNewRole.Name));
+		}
+
+		[TestMethod]
+		public void ShouldGetFullDictionaryObject()
+		{
+			// Arrange
+			var givenUser = _users[0];
+			var primaryCacheKey = _userRedisHash.PrimaryCacheKeyFormatter(givenUser.Id.ToString());
+			_userRedisHash.SetAllAsync(givenUser).WaitAndUnwrapException();
+
+			// Act
+			givenUser.SomeCollection.Remove(2);
+			var newRole = new AppRole { Id = 44, Name = "My Custom Role", RoleGroup = "Changed Role Group" };
+			givenUser.SomeCollection.Add(2, newRole);
+			_userRedisHash.SetDictionaryFieldValueAsync(givenUser.Id.ToString(), info => info.SomeCollection, 2, newRole).WaitAndUnwrapException();
+			var gottenUser = _userRedisHash.GetAllAsync(givenUser.Id.ToString()).WaitAndUnwrapException();
+			var gottenDictionary = _userRedisHash.GetFieldVaueAsync(givenUser.Id.ToString(), info => info.SomeCollection).WaitAndUnwrapException();
+			var gottenNewRole = _userRedisHash.GetDictionaryFieldValueAsync<AppRole>(givenUser.Id.ToString(), info => info.SomeCollection, 2).WaitAndUnwrapException();
+			AppRole givenNewRole;
+
+			//gottenUser.SomeCollection.TryGetValue(2, out gottenNewRole);
+			givenUser.SomeCollection.TryGetValue(2, out givenNewRole);
+
+			// Assert
+			Assert.IsNotNull(gottenUser);
+			Assert.IsTrue(gottenDictionary[1].Name == givenUser.SomeCollection[1].Name);
 			Assert.IsTrue(string.Equals(gottenNewRole.Name, givenNewRole.Name));
 		}
 	}
