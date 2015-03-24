@@ -7,6 +7,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RedisRepo.Src", "RedisRepo.
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RedisRepo.HttpRuntimeCache", "RedisRepo.HttpRuntimeCache\RedisRepo.HttpRuntimeCache.csproj", "{D8251F14-557F-4AF9-9753-7924DFC88346}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RedisRepo.Tests", "RedisRepo.Tests\RedisRepo.Tests.csproj", "{1294896E-A827-4130-B708-D83C35EE7525}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -21,6 +23,10 @@ Global
 		{D8251F14-557F-4AF9-9753-7924DFC88346}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{D8251F14-557F-4AF9-9753-7924DFC88346}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{D8251F14-557F-4AF9-9753-7924DFC88346}.Release|Any CPU.Build.0 = Release|Any CPU
+		{1294896E-A827-4130-B708-D83C35EE7525}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{1294896E-A827-4130-B708-D83C35EE7525}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{1294896E-A827-4130-B708-D83C35EE7525}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1294896E-A827-4130-B708-D83C35EE7525}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
