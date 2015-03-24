@@ -110,20 +110,8 @@ namespace RedisRepo.Src
 
 		public async Task<TFieldValue> GetFieldVaueAsync<TFieldValue>(string entityId, Expression<Func<T, TFieldValue>> propertyExpression)
 		{
-			var redisKey = PrimaryCacheKeyFormatter(entityId);
 			var hashName = GetPropertyName(propertyExpression);
-			var fieldType = typeof(TFieldValue);
-			var isIDictionary = fieldType.GetInterfaces().Any(pi => pi.IsGenericType && pi.GetGenericTypeDefinition() == typeof(IDictionary<,>));
-			if(isIDictionary && FlattenDictionaries)
-			{
-				var fullHash = await RedisDatabase.HashGetAllAsync(redisKey).ConfigureAwait(false);
-				var dictionaryHashes = fullHash.Where(h => h.Name.ToString().Contains(hashName)).ToList();
-				var constructedDictionary = GetConstructedDictionaryPropertyInstance(fieldType, dictionaryHashes, hashName);
-				return (TFieldValue)constructedDictionary;
-			}
-			var hashVal = await RedisDatabase.HashGetAsync(redisKey, hashName).ConfigureAwait(false);
-			var val = JsonConvert.DeserializeObject<TFieldValue>(hashVal);
-			return val;
+			return await GetFieldVaueAsync<TFieldValue>(entityId, hashName).ConfigureAwait(false);
 		}
 
 		public async Task<TFieldValue> GetDictionaryFieldValueAsync<TFieldValue>(string entityId, Expression<Func<T, object>> propertyExpression,
