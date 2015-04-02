@@ -1,4 +1,6 @@
-﻿using Ninject;
+﻿using System.Configuration;
+
+using Ninject;
 using Ninject.Activation;
 using Ninject.Modules;
 using Ninject.Extensions.Conventions;
@@ -11,10 +13,6 @@ namespace RedisRepo.Tests.ServiceLocator
 	{
 		public override void Load()
 		{
-			Kernel.Bind(x => x
-				.FromAssembliesMatching("*")
-				.SelectAllClasses()
-				.BindDefaultInterface());
 			Bind<IAppCache>().To<RedisCache>();
 			Bind<RedisConfig>().ToProvider<RedisConfigProvider>().InSingletonScope();
 			Bind(typeof(ICacheRepo<>)).To(typeof(CacheRepo<>));
@@ -26,7 +24,10 @@ namespace RedisRepo.Tests.ServiceLocator
 	{
 		protected override RedisConfig CreateInstance(IContext context)
 		{
-			var redisConfig = new RedisConfig("localhost,allowAdmin=true", 7);
+		    var redisConnStringAppSetting = ConfigurationManager.AppSettings["RedisConnectionString"];
+		    var redisConnectionString = string.IsNullOrWhiteSpace(redisConnStringAppSetting) ? "localhost, allowAdmin = true" : redisConnStringAppSetting;
+
+			var redisConfig = new RedisConfig(redisConnectionString, 7);
 			return redisConfig;
 		}
 	}
