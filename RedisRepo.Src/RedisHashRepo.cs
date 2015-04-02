@@ -1,5 +1,4 @@
-﻿// Copyright 2012-2014 Unikey Technologies, Inc. All Rights Reserved.
-
+﻿
 using System;
 using System.Collections;
 using System.Collections.Generic;
