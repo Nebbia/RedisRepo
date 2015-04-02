@@ -15,7 +15,7 @@ namespace RedisRepo.Src
 	public class RedisCache : IAppCache
 	{
 		private const string AllPartitionsCacheKey = "AllPartitionNames";
-		private const string TimeoutKeySuffix = ":TimeoutItems";
+		private const string TimeoutKeySuffix = "TimeoutItems";
 		private readonly IDatabase _redisDatabase;
 		private readonly RedisConfig _redisConfig;
 
@@ -378,12 +378,15 @@ namespace RedisRepo.Src
 			return resultList;
 		}
 
-		private static string ComposePartitionKey(string partitionName) { return string.Format("{0}:{1}", "Partition", partitionName); }
+		private static string ComposePartitionKey(string partitionName)
+		{
+			return string.Format("{0}:{1}", "Partition", partitionName);
+		}
 
 		private static string ComposeTimeoutPartitionKey(string partitionName)
 		{
 			var partitionKey = ComposePartitionKey(partitionName);
-			return string.Format("{0}{1}", partitionKey, TimeoutKeySuffix);
+			return string.Format("{0}:{1}", partitionKey, TimeoutKeySuffix);
 		}
 
 		private static string ComputeBasicHash(string textToHash, string salt = "")
