@@ -197,11 +197,10 @@ namespace RedisRepo.Src
 			var indexCacheKey = ComposeKeyForCustomIndex(indexName, indexedValue);
 			if (string.IsNullOrEmpty(partitionName))
 				await _redisDatabase.SetAddAsync(indexCacheKey, indexedObjectCacheKey).ConfigureAwait(false);
-			//await _redisDatabase.HashSetAsync(indexCacheKey, indexedObjectCacheKey, indexedObjectCacheKey).ConfigureAwait(false);
 			else
 			{
 				var partitionKey = ComposePartitionKey(partitionName);
-				await _redisDatabase.HashSetAsync(indexCacheKey, partitionKey, indexedObjectCacheKey).ConfigureAwait(false);
+				await _redisDatabase.HashSetAsync(indexCacheKey, indexedObjectCacheKey, partitionKey).ConfigureAwait(false);
 			}
 		}
 
@@ -297,7 +296,7 @@ namespace RedisRepo.Src
 			if (string.IsNullOrEmpty(indexName) || string.IsNullOrEmpty(indexValue))
 				return null;
 			var hashedIndexedValue = ComputeBasicHash(indexValue);
-			return string.Format("{0}:{1}:{2}", "Custom_Index_For", indexName, hashedIndexedValue);
+			return string.Format("{0}:{1}:{2}", "CustomIndexFor", indexName, hashedIndexedValue);
 		}
 
 		private async Task AddTimeoutToPartitionAsync(string partitionName, string itemKey, TimeSpan? timeout)
@@ -336,15 +335,15 @@ namespace RedisRepo.Src
 			foreach (var hashMember in hashMembers)
 			{
 				// Get the json object out of the partition first
-				var redisVal = await _redisDatabase.HashGetAsync(hashMember.Name.ToString(), hashMember.Value).ConfigureAwait(false);
-				if (redisVal.IsNullOrEmpty)
+				var redisValForPartitionMember = await _redisDatabase.HashGetAsync(hashMember.Value.ToString(), hashMember.Name.ToString()).ConfigureAwait(false);
+				if (redisValForPartitionMember.IsNullOrEmpty)
 				{
 					await _redisDatabase.HashDeleteAsync(hashCacheKey, hashMember.Name).ConfigureAwait(false);
 					continue;
 				}
 
 				// Since we have a json value we deserialize it and add it to the list of return items.
-				var tValueItem = JsonConvert.DeserializeObject<TValue>(redisVal);
+				var tValueItem = JsonConvert.DeserializeObject<TValue>(redisValForPartitionMember);
 				if (tValueItem == default(TValue))
 				{
 					await _redisDatabase.HashDeleteAsync(hashCacheKey, hashMember.Name).ConfigureAwait(false);
