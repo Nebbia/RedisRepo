@@ -36,7 +36,7 @@ namespace RedisRepo.Src
 			get
 			{
 				return _partitionNameFormatter ??
-				       (_partitionNameFormatter = () => string.Format("PartitionNameFor:{0}:{1}", typeof(T).Name, typeof(T).Namespace));
+				       (_partitionNameFormatter = () => string.Format("{0}:{1}", typeof(T).Name, typeof(T).Namespace));
 			}
 			set { _partitionNameFormatter = value; }
 		}
