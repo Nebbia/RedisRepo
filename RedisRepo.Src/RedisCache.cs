@@ -144,11 +144,25 @@ namespace RedisRepo.Src
 		{
 			if (string.IsNullOrEmpty(indexName) || string.IsNullOrEmpty(indexValue))
 				return new List<TValue>();
+			
 			var indexKey = ComposeKeyForCustomIndex(indexName, indexValue);
+			
+			// Compose a key to determine if this "find" has been called for this index value before.
+			// We're doing this to ensure that this "find" gets executed against the database at least once so that
+			// the index is up to date. Once this has been executed, then all subsequent values that get set will
+			// automatically get added to this index since the cache-aside pattern writes to the cache in addition to 
+			// the database when a value is being committed.
+			var executedCallKey = ComposeKeyForExecuteIndexFind(indexKey);
+			var hasBeenExecutedBefore = await _redisDatabase.KeyExistsAsync(executedCallKey).ConfigureAwait(false);
+			if(!hasBeenExecutedBefore)
+			{
+				var timestamp = JsonConvert.SerializeObject(DateTimeOffset.UtcNow);
+				await _redisDatabase.StringSetAsync(executedCallKey, timestamp).ConfigureAwait(false);
+				return new List<TValue>();
+			}
 			List<TValue> indexValues;
 			if (string.IsNullOrEmpty(partitionName))
 				indexValues = await GetAllItemsFromSetAsync<TValue>(indexKey).ConfigureAwait(false);
-			//indexValues = await GetAllItemsFromHashAsync<TValue>(indexKey).ConfigureAwait(false);
 			else
 			{
 				var partitionKey = ComposePartitionKey(partitionName);
@@ -377,6 +391,11 @@ namespace RedisRepo.Src
 			return resultList;
 		}
 
+<<<<<<< HEAD
+=======
+		private static string ComposeKeyForExecuteIndexFind(string indexKey) { return string.Format("ExecuteCallForIndex:{0}", indexKey); }
+
+>>>>>>> Dev
 		private static string ComposePartitionKey(string partitionName)
 		{
 			return string.Format("{0}:{1}", "Partition", partitionName);
