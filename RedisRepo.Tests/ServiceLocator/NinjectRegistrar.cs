@@ -1,5 +1,7 @@
-﻿using Ninject.Activation;
+﻿using Ninject;
+using Ninject.Activation;
 using Ninject.Modules;
+using Ninject.Extensions.Conventions;
 
 using RedisRepo.Src;
 
@@ -9,6 +11,10 @@ namespace RedisRepo.Tests.ServiceLocator
 	{
 		public override void Load()
 		{
+			Kernel.Bind(x => x
+				.FromAssembliesMatching("*")
+				.SelectAllClasses()
+				.BindDefaultInterface());
 			Bind<IAppCache>().To<RedisCache>();
 			Bind<RedisConfig>().ToProvider<RedisConfigProvider>().InSingletonScope();
 			Bind(typeof(ICacheRepo<>)).To(typeof(CacheRepo<>));
