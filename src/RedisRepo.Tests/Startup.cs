@@ -10,6 +10,6 @@ namespace RedisRepo.Tests
 		{
 			var kernel = new StandardKernel(new NinjectRegistrar());
 			AppServiceLocator.SetServiceLocator(() => new NinjectServiceLocator(kernel));
-		} 
+		}
 	}
 }

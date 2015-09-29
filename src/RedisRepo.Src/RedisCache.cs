@@ -391,11 +391,16 @@ namespace RedisRepo.Src
 			return resultList;
 		}
 
+<<<<<<< HEAD:RedisRepo.Src/RedisCache.cs
 <<<<<<< HEAD
 =======
 		private static string ComposeKeyForExecuteIndexFind(string indexKey) { return string.Format("ExecuteCallForIndex:{0}", indexKey); }
 
 >>>>>>> Dev
+=======
+		private static string ComposeKeyForExecuteIndexFind(string indexKey) { return string.Format("ExecuteCallForIndex:{0}", indexKey); }
+
+>>>>>>> Dev:src/RedisRepo.Src/RedisCache.cs
 		private static string ComposePartitionKey(string partitionName)
 		{
 			return string.Format("{0}:{1}", "Partition", partitionName);
