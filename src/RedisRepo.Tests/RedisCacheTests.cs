@@ -47,7 +47,7 @@ namespace RedisRepo.Tests
 				};
 				for (var innerI = 1; innerI < 6; innerI++)
 				{
-					var email = string.Format("{0}.{1}.{2}@SomeEmail.com", user.FirstName, user.LastName, innerI);
+					var email = $"{user.FirstName}.{user.LastName}.{innerI}@SomeEmail.com";
 					user.Emails.Add(email);
 				}
 				for (var j = 1; j < 4; j++)
