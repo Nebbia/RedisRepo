@@ -103,16 +103,27 @@ namespace RedisRepo.Tests
 					         .WaitAndUnwrapException();
 				}
 			}
-			
-			// Act
-			var users0 = _users[0];
-			var users0Email0 = users0.Emails[0];
-			var user1 = (_appCache.FindAsync<UserInfo>("UserEmails", _users[0].Emails[0], "Users").WaitAndUnwrapException()).FirstOrDefault();
-			var user1Email1 = user1.Emails[0];
-			var usersForRole = _appCache.FindAsync<UserInfo>("UsersForRole", roleToSearchFor, "Users").WaitAndUnwrapException();
 
-			// Assert
-			Assert.AreEqual(user1.EntityId, users0.EntityId);
+            // Act
+            var users0 = _users[0];
+            var users0Email0 = users0.Emails[0];
+
+            // We attempt twice due to the first query attempt forcing the logic to go to the database before querying the cache to ensure
+            // that we have the latest elements from the database. We're assuming the developer will put what was found into the cache to 
+            // keep them in sync with each other with the Cache aside pattern.
+            var user1 = (_appCache.FindAsync<UserInfo>("UserEmails", _users[0].Emails[0], "Users").WaitAndUnwrapException()).FirstOrDefault()
+                ?? (_appCache.FindAsync<UserInfo>("UserEmails", _users[0].Emails[0], "Users").WaitAndUnwrapException()).FirstOrDefault();
+            var user1Email1 = user1.Emails[0];
+
+            // Again we attempt the query twice.
+            var usersForRole = _appCache.FindAsync<UserInfo>("UsersForRole", roleToSearchFor, "Users").WaitAndUnwrapException();
+            if (usersForRole == null || usersForRole.Count < 1)
+            {
+                usersForRole = _appCache.FindAsync<UserInfo>("UsersForRole", roleToSearchFor, "Users").WaitAndUnwrapException();
+            }
+
+            // Assert
+            Assert.AreEqual(user1.EntityId, users0.EntityId);
 			Assert.AreEqual(users0Email0, user1Email1);
 			Assert.IsTrue(usersForRole.Count == expectedRolesList.Count);
 		}
