@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 namespace RedisRepo.Src
 {
 	/// <summary>
+	/// 	Wrapper for a typed instance to interact with Redis Cache 
 	/// </summary>
 	public interface ICacheRepo<T> where T : class
 	{
