@@ -36,7 +36,7 @@ namespace RedisRepo.Src
 			get
 			{
 				return _partitionNameFormatter ??
-				       (_partitionNameFormatter = () => string.Format("{0}:{1}", typeof(T).Name, typeof(T).Namespace));
+				       (_partitionNameFormatter = () => $"{typeof (T).Name}:{typeof (T).Namespace}");
 			}
 			set { _partitionNameFormatter = value; }
 		}
@@ -158,7 +158,7 @@ namespace RedisRepo.Src
 					return idPropValue;
 				}
 			}
-			var typeNameId = string.Format("{0}Id", typeof(T).Name);
+			var typeNameId = $"{typeof (T).Name}Id";
 			if(entityPropInfos.Any(pi => string.Equals(pi.Name, typeNameId, StringComparison.InvariantCultureIgnoreCase)))
 			{
 				propInfo = entityPropInfos.FirstOrDefault(pi => string.Equals(pi.Name, typeNameId, StringComparison.InvariantCultureIgnoreCase));
@@ -206,6 +206,6 @@ namespace RedisRepo.Src
 			}
 		}
 
-		private static string ComposeLastCallToGetAllCacheKey() { return string.Format("LastToGetAllFor:{0}", typeof(T).Name); }
+		private static string ComposeLastCallToGetAllCacheKey() { return $"LastToGetAllFor:{typeof (T).Name}"; }
 	}
 }
